@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+"""Rivet launcher: runs the bundled engine against the repository in the current directory."""
+import os
+import sys
+
+sys.dont_write_bytecode = True
+if sys.version_info < (3, 10):
+    sys.stderr.write('{"error": "rivet requires Python 3.10 or newer", "code": "python_version"}\n')
+    sys.exit(1)
+
+LAUNCHER = os.path.realpath(__file__)
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(LAUNCHER)), "lib"))
+
+from rivet.cli import main  # noqa: E402
+
+sys.exit(main(launcher=LAUNCHER))
