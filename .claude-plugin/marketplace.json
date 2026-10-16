@@ -1,0 +1,28 @@
+{
+  "name": "rivet",
+  "owner": {
+    "name": "paralleldanielle"
+  },
+  "metadata": {
+    "description": "Rivet plugin marketplace",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "rivet",
+      "source": "./plugins/rivet",
+      "description": "Bounded-work orchestration for coding agents: one admitted work item at a time with an exclusive lease, Git-measured scope, measured evidence, worker-call accounting and effect approvals, persisted between sessions.",
+      "version": "0.1.0",
+      "license": "Apache-2.0",
+      "category": "development",
+      "keywords": [
+        "workflow",
+        "orchestration",
+        "context",
+        "agents",
+        "git",
+        "evidence"
+      ]
+    }
+  ]
+}

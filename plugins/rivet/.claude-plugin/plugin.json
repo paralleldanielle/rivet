@@ -1,0 +1,19 @@
+{
+  "name": "rivet",
+  "version": "0.1.0",
+  "description": "Bounded-work orchestration for coding agents: one admitted work item at a time with an exclusive lease, Git-measured scope, measured evidence, worker-call accounting and effect approvals, persisted between sessions.",
+  "author": {
+    "name": "paralleldanielle"
+  },
+  "homepage": "https://github.com/paralleldanielle/rivet",
+  "repository": "https://github.com/paralleldanielle/rivet",
+  "license": "Apache-2.0",
+  "keywords": [
+    "workflow",
+    "orchestration",
+    "context",
+    "agents",
+    "git",
+    "evidence"
+  ]
+}

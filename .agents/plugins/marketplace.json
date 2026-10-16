@@ -1,0 +1,20 @@
+{
+  "name": "rivet",
+  "interface": {
+    "displayName": "Rivet"
+  },
+  "plugins": [
+    {
+      "name": "rivet",
+      "source": {
+        "source": "local",
+        "path": "./plugins/rivet"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
