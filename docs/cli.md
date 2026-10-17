@@ -19,6 +19,7 @@
 
 - Take `epoch` and `version` from engine output. Lifecycle mutations need `--expected-version`, and owned work needs the live `--epoch`.
 - Any call that presents the live epoch renews the lease to at least now + TTL. `show`, `status`, `ready` and `doctor` never renew, and never create runtime state.
+- TTLs default to 3600 seconds. A TTL of 0 is accepted and gives an already-expired lease; negative TTLs are rejected.
 - List flags take several space-separated values after one flag (`--allowed-paths src tests`). `--external-result` and `--worker-model` repeat instead.
 
 ## Commands
@@ -71,13 +72,17 @@ The proposal options are:
 
 Relative `--out`, `--in` and `--path` values resolve from the repository root.
 
+`check-effect` errors on an unknown item, and never consumes an approval for an effect that is not gated.
+
+Commands that `doctor` suggests use the launcher's absolute path plus `--repo`, so they run exactly as printed. For an unsupported runtime schema, the suggested reset moves the runtime directory aside as a backup instead of deleting it.
+
 ## Lifecycle
 
 ```
 proposed -> ready -> leased -> running -> verification -> completed
 ```
 
-Also available: `design_review` before admission; `paused`, `blocked` and `abandoned`; and `human_review`, which is a compatibility state entered only by explicit transition.
+Also available: `paused`, `blocked` and `abandoned`.
 
 | Rule | Detail |
 | --- | --- |

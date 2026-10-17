@@ -11,8 +11,8 @@ from .errors import RivetError
 DB_SCHEMA_VERSION = 1
 
 STATES = (
-    "proposed", "design_review", "ready", "leased", "running", "verification",
-    "human_review", "paused", "blocked", "completed", "abandoned",
+    "proposed", "ready", "leased", "running", "verification",
+    "paused", "blocked", "completed", "abandoned",
 )
 _STATE_SQL = ", ".join(f"'{s}'" for s in STATES)
 

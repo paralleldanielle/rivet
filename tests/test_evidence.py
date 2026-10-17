@@ -196,16 +196,8 @@ class EvidenceTests(RivetTestCase):
         self.assertEqual(raised.exception.code, "worktree_changed")
         self.assertEqual(self.show(self.work)["state"], "verification")
 
-    def test_c57_finish_from_human_review(self):
-        self.verify_pass(self.work, self.epoch)
-        version = self.ok("transition", "--id", self.work, "--to", "verification", "--expected-version", 4,
-                          "--epoch", self.epoch)["version"]
-        self.ok("transition", "--id", self.work, "--to", "human_review", "--expected-version", version,
-                "--epoch", self.epoch)
-        self.assertTrue(self.ok("finish", "--id", self.work, "--epoch", self.epoch)["completed"])
-
     def test_c58_any_valid_pass_satisfies_a_criterion(self):
-        """Reference semantics (deferred H7): a later failure at the same fingerprints does not supersede an earlier pass."""
+        """A later failure at the same fingerprints does not supersede an earlier pass (see docs/backlog.md)."""
         self.verify_pass(self.work, self.epoch)
         self.verify(sys.executable, "-c", "raise SystemExit(1)")
         view = self.show(self.work)

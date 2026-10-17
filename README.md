@@ -116,7 +116,7 @@ plugins/rivet/                the installable plugin
 adapters/                     role and host-note sources for the generated agent files
 tools/gen_adapters.py         regenerates role files; --check is enforced by tests
 tests/                        black-box conformance suite (C01–C89) and adapter tests
-docs/                         CLI, formats, hosts, hardening choices, conformance map
+docs/                         CLI, formats, hosts, improvement backlog, conformance map
 .rivet/context/               the portable specification (this repository's own concept directory)
 ```
 
@@ -127,7 +127,7 @@ python3 -m unittest discover -s tests        # about a minute; needs git
 python3 tools/gen_adapters.py                # after editing adapters/
 ```
 
-The behavior follows `.rivet/context/rivet-portable-specification.md`. Deliberate differences from the reference behavior, and the hardening backlog, are listed in [docs/hardening.md](docs/hardening.md).
+The behavior follows `.rivet/context/rivet-portable-specification.md`. Possible future improvements are tracked in [docs/backlog.md](docs/backlog.md).
 
 ## License
 

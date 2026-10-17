@@ -7,23 +7,21 @@ from . import db, gitio, scope, snapshot, util
 from .errors import RivetError
 
 GRAPH = {
-    "proposed": ("design_review", "ready", "abandoned"),
-    "design_review": ("proposed", "ready", "abandoned"),
+    "proposed": ("ready", "abandoned"),
     "ready": ("leased", "blocked", "abandoned"),
     "leased": ("running", "ready", "paused", "abandoned"),
     "running": ("verification", "paused", "blocked", "abandoned"),
-    "verification": ("running", "paused", "abandoned", "human_review", "completed"),
-    "human_review": ("running", "paused", "abandoned", "completed"),
+    "verification": ("running", "paused", "abandoned", "completed"),
     "paused": ("ready", "leased", "running", "verification", "abandoned"),
     "blocked": ("ready", "abandoned"),
     "completed": (),
     "abandoned": (),
 }
 TERMINAL = ("completed", "abandoned")
-ACTIVE = ("leased", "running", "verification", "human_review")
-# Generic transitions never create ownership or completion (hardening H1).
+ACTIVE = ("leased", "running", "verification")
+# Generic transitions never create ownership or completion.
 SPECIALIZED = {"leased": "claim", "completed": "finish or complete"}
-NEEDS_LEASE = ("running", "verification", "human_review", "paused")
+NEEDS_LEASE = ("running", "verification", "paused")
 RELINQUISH = ("ready", "blocked", "abandoned")
 DEFAULT_TTL = 3600
 

@@ -1,40 +1,27 @@
-# Portable Bounded-Work Orchestrator Specification
+# Rivet Specification
 
-**Status:** Draft for independent implementation.
+**Status:** Normative.
 
-**Purpose:** Specify a vendor-neutral replacement for the behavior of the Rivet
-plugin, without requiring its implementation, prompt text, metadata, repository,
-or organizational integrations.
+**Purpose:** Define the observable behavior of Rivet, a host-portable system for
+running bounded engineering work items with durable local state. Any
+implementation that meets these requirements, on any agent host, is a Rivet
+implementation.
 
-This document describes observable behavior and independently stated design
-requirements. It is not source code, a source-code translation, or a license
-grant. Its author inspected the reference implementation and its tests; it must
-not be represented as a legally certified clean-room design. If formal
-clean-room separation is required, have a separate implementation team work only
-from an appropriately reviewed specification.
+This document describes observable behavior and design requirements. It is not
+source code or a license grant.
 
 ## 1. Reading this specification
 
 MUST, SHOULD, and MAY indicate requirements, recommendations, and optional
 features, respectively.
 
-The target is **behavioral equivalence**, not binary, database, or file-format
-compatibility. The executable name `rivet`, `.rivet` directory, command names,
-and JSON field names below provide a concrete interface. A new project MAY
-rename them consistently. It MUST NOT depend on files from the reference
-project at runtime.
+The executable name `rivet`, the `.rivet` directory, command names, and JSON
+field names below are the concrete interface. Behavior is specified, not binary
+or storage layout: an implementation may store state however it likes, provided
+the observable results match.
 
-There are three requirement classes:
-
-| Class | Meaning |
-| --- | --- |
-| Core | Required behavior of the replacement unless explicitly classified otherwise. |
-| Compatibility | Optional support for historical states, formats, or permissive interfaces. |
-| Hardening | Explicitly identified improvements beyond reference behavior; not claims about existing enforcement. |
-
-The logical storage schema and examples here belong to a new implementation.
-Example schema versions start at `1`; they do not identify or imply compatibility
-with a reference database or configuration.
+Schema versions for configuration, the runtime database, and exports start at
+`1`.
 
 ## 2. Product definition
 
@@ -103,8 +90,8 @@ plugin directory.
 
 The five workflows and two agent roles MUST ship together. Any host-specific
 manifest or frontmatter SHOULD contain only the fields required by that host,
-generic discoverability metadata, and the new project's own ownership and
-licensing information. Do not carry over organizational tags, account handles,
+generic discoverability metadata, and the project's own ownership and licensing
+information. It SHOULD NOT contain organizational tags, account handles,
 internal links, model lists, or integration settings.
 
 ### 3.1 Workspace layout
@@ -116,19 +103,22 @@ internal links, model lists, or integration settings.
 | `.rivet/.gitignore` | Excludes `runtime/` | May be committed |
 | `.rivet/runtime/state.db` | Local SQLite state | Must be ignored |
 | `.rivet/runtime/` | Database auxiliaries and optional derived registries | Must be ignored |
-| `.rivet/work.jsonl` | Default explicit export location | Exported only on request |
+| `.rivet/runtime/work.jsonl` | Default explicit export location | Ignored with the rest of `runtime/` |
 
 `context_dir` can replace the default Markdown directory. It MUST remain a
 safe path relative to the Git root.
 
-Engine commands MUST resolve the controller repository through Git, including
-when invoked from a subdirectory. A writer can subsequently be assigned a
-different linked worktree. Lifecycle calls continue to address the controller's
-database; verification commands execute in the assigned writer checkout.
+`context_dir` MUST be resolved through symbolic links and still lie inside the
+repository.
 
-Runtime data MUST NOT be committed. Exports are not automatically ignored:
-creating one inside the repository can itself change scope and invalidate
-evidence. Export under `runtime/` when an ignored local handoff is intended.
+Engine commands MUST resolve the controller repository through Git, including
+when invoked from a subdirectory or from a linked writer worktree: such calls
+reach the controller's database instead of creating a new one. Lifecycle calls
+address the controller's database; verification commands execute in the
+assigned writer checkout.
+
+Runtime data MUST NOT be committed. An export written outside `runtime/` is not
+ignored, so creating it can itself change scope and invalidate evidence.
 
 ## 4. Configuration contract
 
@@ -195,7 +185,7 @@ Write canonical, indented UTF-8 JSON with a final newline. A successful
 configuration write creates the chosen context directory.
 
 `init` MUST preserve existing configuration, create the restricted default if
-missing, initialize compatible runtime state, and create the runtime ignore rule
+missing, initialize runtime state, and create the runtime ignore rule
 if absent. It MUST NOT overwrite an existing ignore file. Concept authoring can
 create a context directory later if initialization did not create it.
 If an existing ignore file leaves runtime state visible to Git, report the
@@ -268,7 +258,7 @@ There is at most one contract per item. It freezes:
 - Configured context directory as the draft-capture allowance.
 - Fingerprints of configuration and the runtime ignore control file.
 - Delegation limit and execution profile used at admission.
-- Admission baseline reference, digest, and original checkout identity.
+- Admission baseline reference, digest, and admission checkout identity.
 
 An approval reference or design fingerprint is metadata, not an independently
 validated authorization or a substitute for the concept hash.
@@ -330,7 +320,7 @@ An artifact path is a reference; the core engine does not certify its contents.
 Baseline snapshots can live in immutable admission/worktree events or a dedicated
 table. They MUST persist with state export and import.
 
-Events SHOULD have a stable sequence independent of timestamp resolution and
+Events MUST have a stable sequence independent of timestamp resolution and
 random identifiers. Preserve that ordering across handoff.
 
 ### 5.7 Transaction and durability rules
@@ -359,20 +349,19 @@ The normal route is:
 proposed -> ready -> leased -> running -> verification -> completed
 ```
 
-Optional design review occurs before admission. `human_review` is a
-compatibility state; new items MUST NOT enter it automatically because of risk.
+There is no separate review state. A human review that must happen before
+completion is an acceptance criterion satisfied by caller-reported evidence
+(section 11.3); risk never adds a review step.
 
 ### 6.1 State graph
 
 | From | Permitted destinations |
 | --- | --- |
-| `proposed` | `design_review`, `ready`, `abandoned` |
-| `design_review` | `proposed`, `ready`, `abandoned` |
+| `proposed` | `ready`, `abandoned` |
 | `ready` | `leased`, `blocked`, `abandoned` |
 | `leased` | `running`, `ready`, `paused`, `abandoned` |
 | `running` | `verification`, `paused`, `blocked`, `abandoned` |
-| `verification` | `running`, `paused`, `abandoned`, optional `human_review`; `completed` through completion |
-| `human_review` | `running`, `paused`, `abandoned`; `completed` through completion |
+| `verification` | `running`, `paused`, `abandoned`; `completed` through completion |
 | `paused` | `ready`, `leased`, `running`, `verification`, `abandoned` |
 | `blocked` | `ready`, `abandoned` |
 | `completed` | None |
@@ -381,8 +370,18 @@ compatibility state; new items MUST NOT enter it automatically because of risk.
 Graph eligibility is not sufficient authorization. Claim, lease, admission,
 dependency, and completion preconditions still apply.
 
-`next_transitions` can report graph destinations; callers MUST NOT mistake this
-for a guarantee that every listed transition is currently executable.
+Two destinations are reachable only through specialized operations:
+
+- Only `claim` enters `leased`.
+- Only guarded completion (`complete` or `finish`) enters `completed`.
+
+A generic `transition` to either MUST be rejected. A transition to `ready`,
+`blocked`, or `abandoned` MUST remove any lease in the same transaction, so no
+live lease is stranded on work that cannot be claimed.
+
+`next_transitions` reports graph destinations reachable by generic transition,
+excluding `leased` and `completed`. Callers MUST NOT mistake it for a guarantee
+that every listed transition is currently executable.
 
 ### 6.2 Compare-and-set
 
@@ -417,8 +416,8 @@ baseline, attempts, evidence history, or call counters.
 if a lease exists. It produces a terminal item and removes its lease, without
 reverting code or deleting a worktree.
 
-Agents SHOULD supply reasons for all transitions even where a compatibility
-interface allows an empty reason.
+Agents SHOULD supply reasons for all transitions, even where the interface
+allows an empty reason.
 
 ## 7. Concept authoring and admission
 
@@ -448,8 +447,8 @@ already bounded concept work without a second review turn.
 ### 7.2 Concept path and hash
 
 Concept references MUST be relative files inside the configured context
-directory. Reject absolute paths, traversal, missing files, and resolved paths
-outside the repository or context directory.
+directory. Reject absolute paths, traversal, missing files, and paths that,
+after resolving symbolic links, lie outside the repository or context directory.
 
 Hash the file's exact bytes with SHA-256. Do not normalize Markdown, encoding,
 whitespace, or line endings before hashing.
@@ -503,7 +502,7 @@ contract. Admission:
 2. Appends a criterion `external:<name>` for every declared external result.
 3. Pins and rechecks the concept hash, if present.
 4. Captures the complete admission baseline and its digest.
-5. Records the original pre-existing paths.
+5. Records the pre-existing paths at admission.
 6. Records control-file fingerprints and the draft allowance.
 7. Allocates zero delegated calls in restricted mode, or the full configured
    `max_calls` in orchestrated mode.
@@ -514,15 +513,16 @@ budget. The coordinator can simply choose to use fewer calls.
 Confirmed concept criteria cannot be replaced at later admission. Repeated
 admission MUST fail rather than updating the existing contract.
 
-### 7.5 Empty scope and evidence compatibility
+### 7.5 Empty scope and evidence
 
-For non-concept work, the reference interface permits empty allowed paths and
-empty required criteria. Empty paths mean **unrestricted repository scope**,
-not no-write access. Empty criteria mean there is no evidence requirement.
+For non-concept work, allowed paths and required criteria may be empty. Empty
+paths mean **unrestricted repository scope**, not no-write access. Empty
+criteria mean there is no evidence requirement.
 
-An exact behavioral replica MAY retain these semantics, but MUST display them
-honestly. Normal agent workflows SHOULD always bound paths and acceptance.
-The hardened profile in section 20 rejects accidental empty contracts.
+Every view of an admitted item MUST report this through `contract_mode`, so an
+unrestricted or evidence-free contract is never mistaken for a bounded one.
+Concept work always requires both (section 7.3). Normal agent workflows SHOULD
+always bound paths and acceptance.
 
 ## 8. Ownership, leases, and attempts
 
@@ -537,7 +537,7 @@ The hardened profile in section 20 rejects accidental empty contracts.
    claim-time `base_sha`, increment attempts and version, and enter leased state.
 
 These checks and updates MUST be atomic. Reclaiming work MUST NOT replace the
-original admission baseline with the current dirty worktree.
+admission baseline with the current dirty worktree.
 
 Claim cannot silently switch the writer path. Use the explicit worktree
 operation for an eligible untouched item.
@@ -549,9 +549,9 @@ other authenticated operation.
 Every successful epoch-authenticated operation SHOULD extend expiry to at least
 `now + ttl_seconds`. Read-only inspection does not renew it.
 
-Default claim and heartbeat TTL is 3,600 seconds. A compatibility implementation
-can accept a zero TTL, producing an immediately expired lease; it cannot then
-be renewed. Negative TTLs SHOULD be rejected.
+Default claim and heartbeat TTL is 3,600 seconds. A TTL of 0 is accepted and
+produces an already-expired lease, which cannot then be renewed. Negative TTLs
+MUST be rejected.
 
 Heartbeat explicitly sets the renewed TTL. Long verification operations extend
 the lease before execution to cover their configured timeout, then authenticate
@@ -568,7 +568,7 @@ local wall clock; command durations SHOULD use a monotonic clock.
 
 ## 9. Admission baseline, scope, and fingerprints
 
-This is the most important part to reproduce accurately. Comparing only
+This is the most important part to implement accurately. Comparing only
 `git diff HEAD`, or only filenames, is insufficient.
 
 ### 9.1 Snapshot contents
@@ -618,9 +618,9 @@ H(S) = SHA256(canonical_UTF8_JSON(S))
 repository_state_fingerprint = SHA256(ASCII(H(B) + H(C)))
 ```
 
-For exact reproducibility within the new project, specify dictionary ordering,
-path encoding, integer representation, and treatment of absent fields.
-The new implementation does not need to produce the reference's digest values.
+An implementation MUST document its canonical form, including dictionary
+ordering, path encoding, integer representation, and treatment of absent fields,
+so that digests are reproducible.
 
 Store and verify the baseline's own digest. A corrupt or missing required
 baseline MUST NOT be reinterpreted as a clean checkout.
@@ -656,8 +656,8 @@ A prefix matches only the exact path or a descendant separated by `/`.
 `src` matches `src` and `src/module.py`, not `src2/module.py`.
 Trailing slashes do not change this rule. Paths are not glob patterns.
 
-Concept contracts MUST reject unsafe prefixes. A new implementation SHOULD
-apply the same validation to ordinary contracts.
+Every contract, concept or ordinary, MUST reject unsafe prefixes: absolute
+paths, `.`, and any `..` component.
 
 For bounded contracts, a delta path is a violation unless:
 
@@ -667,9 +667,14 @@ For bounded contracts, a delta path is a violation unless:
 - It is an unchanged initialization control file whose admitted fingerprint is
   still identical.
 
-Configuration and ignore-file edits are not generally exempt. The core reference
-scope rule detects them as violations when outside allowed paths; it does not
-provide an independent tamper-proof configuration lock against direct edits.
+Configuration and ignore-file edits are not generally exempt. The scope rule
+detects them as violations when outside allowed paths.
+
+Admission freezes the execution profile, call limit, model allow-list, and
+gated effects. `dispatch` and `check-effect` MUST use the frozen values, not the
+live configuration. Changing the configuration file does not refuse further
+mutations; it is reported as drift (section 16.3). There is no tamper-proof lock
+against direct edits.
 
 ### 9.5 Draft capture
 
@@ -682,16 +687,16 @@ it was untracked. Editing it requires normal scope permission.
 The exemption permits capturing a future idea without expanding the active
 item. It does not approve that idea or schedule its implementation.
 
-The reference path exemption is broader than a Markdown parser: it recognizes
-new paths under the context directory. Agent protocol MUST limit use to genuine
-human-context drafts. A stricter file-type policy is an optional enhancement.
+The exemption is path-based, not a Markdown parser: it recognizes any new path
+under the context directory. Agent protocol MUST limit its use to genuine
+human-context drafts.
 
 ### 9.6 Concept drift
 
 Independently of allowed paths, rehash the admitted concept before completion.
 Missing or changed bytes are a blocker even if the concept is inside an
 otherwise allowed prefix. Never edit the concept to match an implementation
-and then treat the original contract as unchanged.
+and then treat the admitted contract as unchanged.
 
 ### 9.7 Whole-worktree evidence
 
@@ -738,9 +743,12 @@ settle the call, and evaluate the result before the next assignment.
 Workers MUST NOT invoke workers or operate engine state. This is protocol-only
 unless a host independently restricts those capabilities.
 
-The reference engine's accounting can represent several outstanding reservations;
-it does not itself prove sequential execution. Do not advertise SQLite counters
-as a host concurrency limit.
+The accounting can represent several outstanding reservations; it does not
+itself prove sequential execution. Do not advertise SQLite counters as a host
+concurrency limit.
+
+A reserved but unsettled call MUST block completion with `outstanding_dispatch`.
+Reconciling a reservation after a crash is always an explicit `settle-dispatch`.
 
 There is no persisted child-task queue, scheduler, recursion budget, or mandatory
 commit per assignment. Direct foreground work is always a valid choice.
@@ -770,10 +778,9 @@ For ordinary criteria, both measured and caller-reported passes can satisfy the
 core contract. If both exist, report the source as `engine_measured`; a later
 assertion must not relabel measured evidence as merely reported.
 
-Reference-compatible ordinary evidence is existential: a new failure at the same
-fingerprints does not automatically supersede every earlier pass. This nuance
-MUST be documented if retained. Section 20 offers latest-result semantics as a
-deliberate alternative.
+Ordinary evidence is existential: a new failure at the same fingerprints does
+not supersede an earlier valid pass. External criteria differ: the latest
+measurement wins (section 12.2).
 
 ### 11.2 Measured command verification
 
@@ -787,7 +794,8 @@ deliberate alternative.
    evidence, and insert one measured result transactionally.
 
 Defaults: `kind = command`, timeout 1,800 seconds, working directory is the
-leased writer root.
+leased writer root. A `--cwd` MUST be resolved through symbolic links and stay
+inside the writer checkout.
 
 Exit code zero means `pass`; any nonzero exit or timeout means `fail`.
 A timeout has `timed_out = true` and no normal exit code.
@@ -795,9 +803,9 @@ Failure to launch the executable is a command-contract error, not a fabricated
 test result.
 
 Record a display-safe command description, optional artifact pointer, exit code,
-elapsed seconds, and a bounded output tail. A compatible retention policy is
-the final 4,096 decoded characters of stdout followed by stderr, decoding
-undecodable bytes with replacement. This is not interleaved stream chronology.
+elapsed seconds, and a bounded output tail. The tail is the final 4,096 decoded
+characters of stdout followed by stderr, decoding undecodable bytes with
+replacement. This is not interleaved stream chronology.
 
 The CLI operation succeeds when it successfully **records** a failed
 verification. The caller must inspect `outcome`; process exit zero does not mean
@@ -835,9 +843,9 @@ Reject unknown fields, invalid outcomes, missing required strings, and attempts
 to combine a batch with single-record criterion/kind/outcome flags. Validate
 the entire batch and insert all rows in one transaction.
 
-Caller-reported data cannot choose `engine_measured` as its source.
-Compatibility flags for explicit fingerprints MAY be accepted, but values that
-do not match the actual completion subject cannot settle acceptance.
+Caller-reported data cannot choose `engine_measured` as its source, and
+cannot supply its own fingerprints: the engine binds every record to the
+current repository state, exactly as for measured results.
 
 ### 11.4 Reserved external criteria
 
@@ -946,9 +954,14 @@ For a mandatory or configured gate, authorization requires a matching unused
 approval. For a nongated effect, the result can be authorized without an
 approval. A nonconsuming check is only a preview.
 
-With `--consume`, use one matching approval and mark it consumed. Check immediately
-before the action, not once for an entire session. A failed external action does
-not implicitly restore the consumed approval.
+With `--consume`, use one matching approval and mark it consumed. Selection and
+consumption MUST be one conditional update inside a write transaction, so a
+single approval is consumed exactly once even under concurrent checks. Never
+consume an approval for an effect that is not gated. Check immediately before
+the action, not once for an entire session. A failed external action does not
+implicitly restore the consumed approval.
+
+`check-effect` on an unknown item is an error, not an unauthorized result.
 
 The required-effects list in the contract is not permission to act, and
 completion is not approval to publish.
@@ -978,10 +991,11 @@ Create a new branch at the lease base commit using Git worktree support.
 Register its absolute path, branch, base, and work ID; associate it with the
 lease. Capture a separate baseline for the isolated writer.
 
-Preserve original admission context. Inspection MUST distinguish:
+Preserve the admission context. Inspection MUST distinguish:
 
 - `preexisting_paths`: the current writer baseline's prior edits.
-- `original_preexisting_paths`: earlier edits in the original controller checkout.
+- `original_preexisting_paths`: earlier edits in the controller checkout at
+  admission.
 
 After pause, release, and reclaim, continue in the same registered writer
 checkout. Do not recapture its current state as a fresh clean baseline.
@@ -1009,13 +1023,15 @@ turn is added if approved boundaries remain unchanged.
 The engine cannot attest to that human request. The workflow/adapter must
 distinguish it from an unapproved draft or the agent's own inference.
 
+`start --approval-ref` stores the approval reference with the contract.
+
 Non-concept start uses the ordinary proposal contract. Both routes return ID,
 state, version, epoch, base SHA, risk, paths, required evidence, external results,
 concept hash, draft allowance, baseline digest, pre-existing paths, allocated
 budget, and delegation readiness.
 
-Reference-compatible start is a sequence of committed operations, not an
-all-or-nothing supertransaction. For example, an incomplete dependency can
+Start is a sequence of committed operations, not an all-or-nothing
+supertransaction. For example, an incomplete dependency can
 leave a ready, unadmitted proposal containing the confirmed concept contract.
 Do not execute outside the engine after such a failure. Inspect the existing
 item and resume admission when the prerequisite is satisfied.
@@ -1029,7 +1045,7 @@ items merely to bypass the blocker.
 
 - A live matching epoch.
 - The expected current item version.
-- State verification, or compatible human review.
+- State `verification`.
 - An admitted contract.
 - Measurable, valid baseline and current writer state.
 - No concept drift.
@@ -1050,8 +1066,8 @@ recheck failure MAY persist evidence invalidation even though completion fails.
 
 ### 15.3 Finish
 
-`finish` is a caller-friendly completion wrapper for leased, running,
-verification, or compatible human-review states.
+`finish` is a caller-friendly completion wrapper for leased, running, or
+verification states.
 
 It refreshes evidence validity, checks scope and concept, and rechecks external
 results. Expected engineering blockers return a successful JSON response such
@@ -1117,10 +1133,10 @@ Scope statuses MUST distinguish:
 An empty violation array accompanying unavailable measurement MUST NOT be
 reported as proof of clean scope.
 
-Reference-compatible evidence summaries use stored validity flags; inspection
-alone does not invalidate stale rows. Therefore a recorded pass is not a
-completion guarantee. A new implementation SHOULD evaluate freshness read-only
-or explicitly label the summary as recorded rather than freshly validated.
+Evidence summaries in `show` and `status` use stored validity flags; inspection
+alone does not invalidate stale rows. They MUST be labeled `"basis": "recorded"`
+so that a recorded pass is not mistaken for a completion guarantee. `finish`
+and `complete` always re-evaluate freshness.
 
 ### 16.2 Status
 
@@ -1166,9 +1182,14 @@ Minimum diagnostics:
 - Scope violations and concept drift for measurable active work.
 - Honest notice of protocol-only effects and delegation rules.
 
-A new implementation SHOULD also report stored evidence freshness and
-control-file drift directly. Doctor MUST NOT imply it reran tests or checked
-every remote just because it read evidence rows.
+Doctor MUST also report stored evidence that no longer matches the current
+repository state (`stale_evidence`), configuration or ignore-file changes since
+admission (`control_file_drift`), and unsettled reservations
+(`outstanding_dispatch`). Doctor MUST NOT imply it reran tests or checked every
+remote just because it read evidence rows.
+
+Suggested commands MUST use the launcher's absolute path plus `--repo`, so they
+run exactly as printed.
 
 ### 16.4 Explicit metadata repair
 
@@ -1176,7 +1197,9 @@ A read-only doctor response SHOULD include `suggested_repair` with an exact
 command and confirmation token when repairable issues exist.
 
 `doctor --fix` requires that token and explicit human confirmation. The token
-is an acknowledgement mechanism, not proof of identity or authority.
+is derived from the current findings, so a token from an older diagnosis no
+longer matches. It is an acknowledgement mechanism, not proof of identity or
+authority.
 
 Only deterministic lease/lifecycle metadata repair is allowed:
 
@@ -1185,7 +1208,10 @@ Only deterministic lease/lifecycle metadata repair is allowed:
 | `leased` | `ready` |
 | `running` | `paused` |
 | `verification` | `paused` |
-| `human_review` | `paused` |
+
+Under the repair transaction, re-read each item's state, lease, and expiry, and
+skip any item renewed, reclaimed, or changed since the diagnosis. A stale
+diagnosis MUST NOT revoke a newly live owner.
 
 Remove the expired lease, increment lifecycle version where changed, and append
 repair events. Do not reset attempts, call counters, the contract, or baseline.
@@ -1194,39 +1220,38 @@ Repair does not grant a new epoch; a later claim does.
 Doctor MUST NOT delete worktrees, alter code or concepts, widen scope, consume
 approvals, rerun commands, publish, or perform external destructive effects.
 
-A compatibility response can preserve findings from before repair and therefore
-still have `ok: false`; report repairs separately and rerun read-only doctor to
-establish the post-repair result.
+The repair response is a fresh diagnosis taken after repair, plus `repaired`
+(items changed) and `skipped` (items left alone because they changed since the
+diagnosis).
 
 ### 16.5 Schema mismatch
 
-No migration is required for the initial portable implementation. Unsupported
-schemas MUST fail closed with a precise recovery explanation.
+Schema migration is not provided. Unsupported schemas MUST fail closed with a
+precise recovery explanation.
 
-Distinguish a stale database from stale configuration. Offer explicit export
-when supported, a backup of needed local state, and a human-confirmed reset of
-the resolved runtime directory only. Never automatically delete state or rewrite
-schema metadata to make incompatible files appear compatible.
+Distinguish a stale database from stale configuration. Offer a human-confirmed
+reset of the resolved runtime directory only, which moves it aside as a backup
+rather than deleting it. Never automatically delete state or rewrite schema
+metadata to make incompatible files appear compatible.
 
 ## 17. Export and import
 
 Provide JSON Lines checkpoint export plus optional event-only export.
-A portable header can be:
+The first line is a header:
 
 ```json
-{"record_type":"bounded-work-export","schema_version":1,"mode":"checkpoint"}
+{"record_type":"rivet-export","schema_version":1,"mode":"checkpoint","exported_at":"<ISO-8601 UTC>"}
 ```
 
-Each subsequent record identifies a logical table and its row data. This is a
-new format; an adapter is required to consume a reference export.
+`mode` is `checkpoint` or `events`. Each subsequent record identifies a logical
+table and its row data.
 
 A checkpoint MUST contain work items, dependencies, contracts, budgets, leases,
-evidence, approvals, follow-ups, baseline events, and general events.
+evidence, approvals, follow-ups, baseline events, general events, and
+writer-worktree registration. Events MUST appear in their local sequence order.
 
-The replacement SHOULD also export writer-worktree registration. Reference
-checkpoint behavior omits that derived registration table, so exact legacy
-compatibility needs to disclose the omission rather than promise complete
-worktree portability.
+Export defaults to `.rivet/runtime/work.jsonl`. Relative export and import paths
+resolve from the repository root.
 
 `--since <timestamp>` exports only events newer than the supplied bound.
 An event-only stream is audit material, not a complete canonical state snapshot
@@ -1257,8 +1282,8 @@ Preserve event order where it determines the selected writer baseline.
 ## 18. CLI surface
 
 Every normal command emits one JSON value on stdout. A domain, filesystem, or
-database error emits at least `{"error":"human-readable reason"}` on stderr and
-exits nonzero. Argument-parser help and syntax errors may use conventional CLI
+database error emits at least `{"error":"human-readable reason","code":"<stable code>"}`
+on stderr and exits nonzero. The `code` is stable and machine-readable. Argument-parser help and syntax errors may use conventional CLI
 output and exit codes.
 
 Do not mix subprocess output into JSON stdout. Capture verification output and
@@ -1279,7 +1304,7 @@ accept multiple values; external-result and worker-model options repeat.
 | `config` | None | Root, configuration, enforcement, delegation |
 | `config-init` | `--profile <profile> [--context-dir path] [--max-calls n] [--worker-model name] [--replace] [--dry-run]` | Proposed or persisted configuration and action |
 | `concept-fingerprint` | `--concept-ref <path>` | Normalized reference and SHA-256 |
-| `concept-proposal` | `--concept-ref <path> --objective <text> --allowed-paths <prefixes> [proposal options] [--confirm hash]` | Read-only bound preview or started item |
+| `concept-proposal` | `--concept-ref <path> --objective <text> --allowed-paths <prefixes> [proposal options] [--confirm hash] [--owner owner] [--ttl-seconds n] [--approval-ref ref]` | Read-only bound preview or started item |
 | `propose` | `--objective <text> [--id id] [--risk risk] [--allowed-paths prefixes] [--effects names] [--external-result json] [--depends-on ids] [--max-attempts n]` | Proposed item ID and state |
 | `ready` | None | Dependency-unblocked proposed/ready items |
 | `admit` | `--id <id> [--required-evidence names] [--approval-ref ref] [--concept-fingerprint hash] [--design-fingerprint hash]` | Frozen contract summary, baseline, full budget, delegation |
@@ -1314,9 +1339,7 @@ where not already required. Concept-proposal requires its paths explicitly;
 start requires them when concept-linked.
 
 Single asserted evidence uses `--criterion`, `--kind`, `--outcome`, optional
-`--command`, `--artifact`, and `--commit-sha`. Compatibility-only
-`--input-fingerprint` and `--diff-fingerprint` apply to asserted records, never
-to measured verification.
+`--command`, `--artifact`, and `--commit-sha`.
 
 Do not add generic reserve/settle-budget commands, host credit-limit flags,
 automatic final approvers, or per-item delegated-call overrides.
@@ -1421,36 +1444,15 @@ an implementation item exists.
 Planning notes and transcripts can be session-local. Do not add a persistent
 repository plan or child-task queue unless the human explicitly requests it.
 
-## 20. Explicit portability choices and recommended hardening
-
-The core spec intentionally does not claim bug-for-bug compatibility.
-Make the following choices explicit in the new project's documentation.
-
-| ID | Recommended portable behavior | Difference from permissive/reference behavior |
-| --- | --- | --- |
-| H1 | Only claim creates leased ownership; every route into completed invokes guarded completion; transitions to ready or blocked relinquish ownership atomically | Generic transitions must not bypass specialized guards or strand a live lease in an unclaimable state |
-| H2 | Consume approvals atomically with selection, and reject duplicate concurrent consumption | A check followed by an independent update is not an exactly-once consumption guarantee |
-| H3 | During doctor repair, reread state/epoch/expiry under the repair transaction and skip anything renewed or reclaimed since diagnosis | A stale diagnostic snapshot must not revoke a newly live owner |
-| H4 | Resolve configuration directories and verification `cwd` inside the permitted checkout; reject symlink escapes and absolute escapes | Lexical validation or path joining alone does not establish containment |
-| H5 | Require explicit nonempty paths and acceptance for all new work, or a visibly explicit unrestricted/no-evidence mode | Non-concept empty lists otherwise permit unrestricted or evidence-free completion |
-| H6 | Freeze or hash the complete effective configuration and reject drift before mutations | Configuration replacement is blocked by the API, but direct filesystem edits are not automatically prevented |
-| H7 | Evaluate evidence freshness in read-only views; optionally make the latest result for a criterion supersede prior results | Stored validity alone can look stale; an earlier pass can otherwise coexist with a later failure |
-| H8 | Preserve stable event ordering and worktree registration in exports | Timestamp/ID sorting and omission of registry data are insufficient for a fully portable checkpoint |
-| H9 | Treat a genuinely active worker as a host-side completion blocker and reconcile interrupted reservations explicitly | Call counters alone neither prove sequential execution nor worker termination |
-
-H1 through H4 are strongly recommended for a new implementation. They
-strengthen the intended guardrails without requiring a scheduler or new product
-scope. H5 through H9 are intentional observable policy/format choices; do not
-enable them silently while claiming exact command behavior.
-
-Optional historical compatibility MAY include `human_review` and a reported
-`legacy_head` measurement mode for deliberately imported old items. Never
-silently fall back to that mode when a required modern baseline is corrupt.
-Historical schema migration is not required.
+## 20. Enforcement limits
 
 Do not claim stronger guarantees from agent instructions than the host actually
 enforces. A local CLI accessible to the same process as arbitrary shell tools is
 not an isolation boundary.
+
+Every admission record carries a baseline. A missing or corrupt baseline is an
+error and MUST NOT be measured against some other reference such as claim-time
+HEAD.
 
 ## 21. Conformance scenarios
 
@@ -1501,7 +1503,7 @@ is necessary.
 | C25 | A wrong or expired epoch cannot transition, heartbeat, verify, reserve, or settle |
 | C26 | A successful authenticated call renews a live lease; show/status do not |
 | C27 | Stale expected version cannot mutate lifecycle or invalidate evidence through completion |
-| C28 | First claim rejects changes after admission; reclaim preserves the original baseline |
+| C28 | First claim rejects changes after admission; reclaim preserves the admission baseline |
 | C29 | Pause retains the lease; another owner cannot claim until release or valid recovery |
 | C30 | Pause/release/reclaim changes the epoch, increases attempts, and preserves counters and contract |
 | C31 | Abandon removes the lease without reverting code; terminal items cannot restart |
@@ -1540,7 +1542,6 @@ is necessary.
 | C54 | Finish with missing criteria returns completed false and structured blockers without advancing state |
 | C55 | Current evidence, unchanged concept, and in-scope delta permit completion and remove the lease |
 | C56 | Changing the worktree during completion prevents settlement against the earlier fingerprint |
-| C57 | Finish from compatible human review requires no obsolete approved-by flag |
 | C58 | Test the selected same-subject pass/fail supersession policy explicitly |
 
 ### 21.6 Delegation and effects
@@ -1577,9 +1578,9 @@ is necessary.
 | C76 | Doctor reports expired and ownerless active work with structured error findings |
 | C77 | Repair without confirmation fails; leased recovers to ready and started work to paused |
 | C78 | Repair does not reset attempts/budgets, consume approvals, delete worktrees, or alter code |
-| C79 | Worktree creation records a separate baseline; original pre-existing edits remain visible separately |
+| C79 | Worktree creation records a separate baseline; the controller checkout's pre-existing edits remain visible separately |
 | C80 | Worktree creation rejects an edited item or uncommitted/mismatched pinned concept |
-| C81 | Reclaim resumes the registered isolated writer, not the original checkout |
+| C81 | Reclaim resumes the registered isolated writer, not the controller checkout |
 | C82 | Checkpoint import round-trips state and baseline; identical rows are skipped |
 | C83 | A conflicting primary key or deletion record aborts the whole import |
 | C84 | Event-only import cannot overwrite canonical lifecycle state |
@@ -1589,17 +1590,16 @@ is necessary.
 | C88 | Duplicate IDs and database constraints return JSON errors rather than tracebacks or success-shaped output |
 | C89 | Human redirection pauses live work and serves the new request without silently finishing or resuming the old item |
 
-For each enabled hardening choice, add adversarial regression tests:
-generic-transition completion bypass, concurrent approval consumption,
-lease renewal racing repair, path/symlink escape, accidental empty contract,
-manual configuration drift, contradictory evidence, shuffled checkpoint order,
-and completion while a worker is still active.
+Also cover these adversarial cases: a generic transition into `leased` or
+`completed`, concurrent approval consumption, lease renewal racing repair,
+path and symlink escapes, an empty contract shown through `contract_mode`,
+manual configuration drift, contradictory evidence at the same fingerprints,
+checkpoint event order, and completion while a reservation is unsettled.
 
 ## 22. Example end-to-end use
 
-The following commands illustrate the replacement's intended interface. They
-assume its launcher is installed as `rivet`; they do not depend on source from
-another project.
+The following commands illustrate the interface. They assume the launcher is
+installed as `rivet`.
 
 First preview configuration:
 
@@ -1656,9 +1656,9 @@ No publication is implied. If publishing is part of the approved boundary,
 obtain and consume its matching effect approval immediately before the host
 executes that action.
 
-## 23. Definition of a successful replacement
+## 23. Definition of a conforming implementation
 
-The replacement is complete when it runs independently in an unrelated Git
+An implementation conforms when it runs independently in an unrelated Git
 project, passes the applicable conformance scenarios, persists and resumes work
 across fresh sessions, and accurately distinguishes:
 
@@ -1666,6 +1666,3 @@ Human intent from execution state; pre-existing edits from post-admission work;
 measured results from assertions; per-item lease ownership from repository
 isolation; declared worker accounting from actual host enforcement; and external
 result verification from control of another repository.
-
-No original implementation file, agent wording, organizational metadata,
-internal service, or corporate identity is required to meet this specification.

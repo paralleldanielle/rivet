@@ -1,6 +1,6 @@
 # Formats
 
-These formats belong to this implementation. Schema versions start at 1, and this project does not claim compatibility with any reference database or configuration.
+These formats belong to Rivet. Schema versions start at 1.
 
 ## Canonical JSON and digests
 

@@ -3,8 +3,8 @@
 from . import db, evidence, external, lifecycle
 from .errors import RivetError
 
-COMPLETABLE = ("verification", "human_review")
-FINISHABLE = ("leased", "running", "verification", "human_review")
+COMPLETABLE = ("verification",)
+FINISHABLE = ("leased", "running", "verification")
 
 
 def _outstanding(conn, work_id):
@@ -28,7 +28,7 @@ def complete(ws, work_id, epoch, expected_version):
         lease = lifecycle.authenticate(conn, work_id, epoch, now)
         lifecycle.check_version(item, expected_version)
         if item["state"] not in COMPLETABLE:
-            raise RivetError("invalid_state", f"complete needs verification or human_review; {work_id} is {item['state']}")
+            raise RivetError("invalid_state", f"complete needs verification; {work_id} is {item['state']}")
     subject = evidence.Subject(conn, ws, work_id, contract, lease)
     if subject.measurement.drift:
         raise RivetError("concept_drift", f"concept drift blocks completion: {subject.measurement.drift}",
@@ -46,7 +46,7 @@ def complete(ws, work_id, epoch, expected_version):
         lifecycle.authenticate(conn, work_id, epoch, now, renew=False)
         lifecycle.check_version(item, expected_version)
         if item["state"] not in COMPLETABLE:
-            raise RivetError("invalid_state", f"complete needs verification or human_review; {work_id} is {item['state']}")
+            raise RivetError("invalid_state", f"complete needs verification; {work_id} is {item['state']}")
         evidence.invalidate_stale(conn, work_id, settle)
         if settle.measurement.violations:
             raise RivetError("scope_violation", "out-of-scope changes block completion: "
@@ -70,7 +70,7 @@ def finish(ws, work_id, epoch):
     with db.write_txn(conn):
         item, contract = _require(conn, work_id)
         if item["state"] not in FINISHABLE:
-            raise RivetError("invalid_state", f"finish needs leased, running, verification or human_review work; {work_id} is {item['state']}")
+            raise RivetError("invalid_state", f"finish needs leased, running or verification work; {work_id} is {item['state']}")
         lease = lifecycle.authenticate(conn, work_id, epoch, now)
     subject = evidence.Subject(conn, ws, work_id, contract, lease)
     with db.write_txn(conn):

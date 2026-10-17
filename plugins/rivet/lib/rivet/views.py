@@ -6,7 +6,7 @@ import shlex
 from . import config, db, evidence, external, gitio, lifecycle, scope, util
 from .errors import RivetError
 
-REPAIR = {"leased": "ready", "running": "paused", "verification": "paused", "human_review": "paused"}
+REPAIR = {"leased": "ready", "running": "paused", "verification": "paused"}
 
 
 def _blockers(conn, item, contract, lease, summary, now):
@@ -23,7 +23,7 @@ def _blockers(conn, item, contract, lease, summary, now):
         out.append({"code": "lease_missing", "detail": f"{state} with no lease; recover with the doctor workflow"})
     if state in ("ready", "paused") and item["attempts"] >= item["max_attempts"]:
         out.append({"code": "attempts_exhausted", "detail": f"{item['attempts']}/{item['max_attempts']}"})
-    if summary is not None and state in ("verification", "human_review") and summary["missing"]:
+    if summary is not None and state == "verification" and summary["missing"]:
         out.append({"code": "evidence_missing", "detail": ", ".join(summary["missing"])})
     if contract is not None and summary is not None:
         for failure in external.latest_failures(conn, item["id"], contract, summary["satisfied"]):
@@ -206,7 +206,7 @@ def _cycles(conn):
 def _repairable(conn, now):
     """Expired or missing leases on active work, with their target state."""
     out = []
-    for row in conn.execute("SELECT id FROM work_items WHERE state IN ('leased', 'running', 'verification', 'human_review') ORDER BY id"):
+    for row in conn.execute("SELECT id FROM work_items WHERE state IN ('leased', 'running', 'verification') ORDER BY id"):
         item = db.item(conn, row["id"])
         lease = db.lease(conn, item["id"])
         if lease is None:
@@ -340,7 +340,7 @@ def diagnose(ws):
         report["suggested_repair"] = {
             "command": ws.command("doctor", "--fix", "--confirm", token),
             "confirm_token": token,
-            "note": "Recovers lease/lifecycle metadata only (leased -> ready; running, verification, human_review -> paused). "
+            "note": "Recovers lease/lifecycle metadata only (leased -> ready; running, verification -> paused). "
                     "Run only after explicit human confirmation.",
         }
     return report, repairs

@@ -62,7 +62,6 @@ Run with `python3 -m unittest discover -s tests`.
 | C54 | `test_evidence.py` EvidenceTests.test_c54_finish_with_missing_criteria_reports_blockers_without_advancing |
 | C55 | `test_evidence.py` EvidenceTests.test_c55_current_evidence_and_scope_complete_and_remove_the_lease |
 | C56 | `test_evidence.py` EvidenceTests.test_c56_changes_during_completion_prevent_settlement |
-| C57 | `test_evidence.py` EvidenceTests.test_c57_finish_from_human_review |
 | C58 | `test_evidence.py` EvidenceTests.test_c58_any_valid_pass_satisfies_a_criterion |
 | C59 | `test_delegation.py` DelegationTests.test_c59_restricted_rejects_dispatch_orchestrated_running_permits |
 | C60 | `test_delegation.py` DelegationTests.test_c60_limit_two_allows_exactly_two_reservations |

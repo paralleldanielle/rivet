@@ -1,4 +1,4 @@
-"""Ownership and lifecycle conformance: C11, C12, C23–C32 (and hardening H1)."""
+"""Ownership and lifecycle conformance: C11, C12, C23–C32, plus generic-transition guards."""
 
 import os
 import subprocess
@@ -210,7 +210,7 @@ class LifecycleTests(RivetTestCase):
         self.assertNotIn(followup["id"], [i["id"] for i in self.ok("ready")["ready"]])
         self.err("show", "--id", followup["id"], code="not_found")
 
-    def test_h1_generic_transition_cannot_create_ownership_or_completion(self):
+    def test_generic_transition_cannot_create_ownership_or_completion(self):
         work = self.admitted(evidence=("tests",))
         self.err("transition", "--id", work, "--to", "leased", "--expected-version", 2, code="invalid_transition")
         self.err("transition", "--id", work, "--to", "running", "--expected-version", 2, code="invalid_transition")
@@ -218,11 +218,10 @@ class LifecycleTests(RivetTestCase):
         epoch = claimed["epoch"]
         version = self.ok("transition", "--id", work, "--to", "running", "--expected-version", 3, "--epoch", epoch)["version"]
         version = self.ok("transition", "--id", work, "--to", "verification", "--expected-version", version, "--epoch", epoch)["version"]
-        version = self.ok("transition", "--id", work, "--to", "human_review", "--expected-version", version, "--epoch", epoch)["version"]
         self.err("transition", "--id", work, "--to", "completed", "--expected-version", version, "--epoch", epoch,
                  code="invalid_transition")
         view = self.show(work)
-        self.assertEqual(view["state"], "human_review")
+        self.assertEqual(view["state"], "verification")
         self.assertEqual(view["evidence"]["missing"], ["tests"])
         self.assertNotIn("completed", view["next_transitions"])
 
